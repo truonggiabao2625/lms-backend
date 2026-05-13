@@ -18,20 +18,21 @@ const app = express();
 
 app.use(helmet());
 
+const normalizeOrigin = (origin) => origin?.trim().replace(/\/+$/, '');
+
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
-  ...(process.env.FRONTEND_URLS || '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean),
   process.env.FRONTEND_URL,
-].filter(Boolean);
+  ...(process.env.FRONTEND_URLS || '').split(','),
+]
+  .map(normalizeOrigin)
+  .filter(Boolean);
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.includes(normalizeOrigin(origin))) {
         callback(null, true);
         return;
       }
