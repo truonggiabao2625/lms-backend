@@ -6,9 +6,379 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum MemberTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+  DIAMOND
+}
+
+enum WalletTransactionType {
+  TOP_UP
+  COURSE_PURCHASE
+  REFUND
+  ADJUSTMENT
+}
+
+enum PaymentProvider {
+  STRIPE
+  MOCK
+  MANUAL
+}
+
+enum ExternalPaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum PurchaseStatus {
+  COMPLETED
+  REFUNDED
+  CANCELED
+}
+
+enum Role {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+enum NotificationType {
+  SYSTEM
+  COURSE_REMINDER
+  COURSE_COMPLETED
+  CERTIFICATE_ISSUED
+  STREAK_REMINDER
+  PAYMENT_SUCCESS
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
+  id            String     @id @default(cuid())
+  email         String     @unique
+  name          String
+  password      String
+  role          Role       @default(STUDENT)
+  avatar        String?
+  phone         String?
+  bio           String?
+  settings      String?
+  walletBalance Int        @default(0)
+  totalSpent    Int        @default(0)
+  memberTier    MemberTier @default(BRONZE)
+
+  courses            Course[]
+  enrollments        Enrollment[]
+  lessonProgress     LessonProgress[]
+  comments           Comment[]
+  reviews            CourseReview[]
+  walletTransactions WalletTransaction[]
+  purchases          Purchase[]
+  externalPayments   ExternalPayment[]
+  notifications      Notification[]
+  certificates       Certificate[]
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model Course {
+  id                 String     @id @default(cuid())
+  title              String
+  slug               String     @unique
+  description        String?
+  thumbnail          String?
+  price              Int        @default(0)
+  averageRating      Float      @default(0)
+  reviewCount        Int        @default(0)
+  minimumMemberTier  MemberTier @default(BRONZE)
+  totalDurationSeconds Int      @default(0)
+  isPublished        Boolean    @default(false)
+  publishedAt        DateTime?
+
+  instructorId String
+  instructor   User   @relation(fields: [instructorId], references: [id], onDelete: Cascade)
+
+  sections           Section[]
+  lessons            Lesson[]
+  enrollments        Enrollment[]
+  reviews            CourseReview[]
+  walletTransactions WalletTransaction[]
+  purchases          Purchase[]
+  certificates       Certificate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([instructorId])
+  @@index([isPublished, createdAt])
+  @@index([slug])
+}
+
+model CourseReview {
+  id      String  @id @default(cuid())
+  rating  Int
+  comment String?
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, courseId])
+  @@index([courseId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model Section {
+  id          String  @id @default(cuid())
+  title       String
+  description String?
+  position    Int
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  lessons   Lesson[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+  @@unique([courseId, position])
+}
+
+model Lesson {
+  id              String  @id @default(cuid())
+  title           String
+  content         String?
+  videoUrl        String?
+  durationSeconds Int?
+  position        Int
+  isPublished     Boolean @default(false)
+  isPreview       Boolean @default(false)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  sectionId String
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  lessonProgress LessonProgress[]
+  comments       Comment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+  @@index([sectionId])
+  @@index([courseId, isPreview])
+  @@unique([sectionId, position])
+}
+
+model Enrollment {
+  id       String @id @default(cuid())
+  progress Float  @default(0)
+  completedAt DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, courseId])
+  @@index([courseId, createdAt])
+  @@index([userId, updatedAt])
+}
+
+model LessonProgress {
+  id          String  @id @default(cuid())
+  isCompleted Boolean @default(false)
+  watchedSeconds Int @default(0)
+  lastPositionSeconds Int @default(0)
+  completionRate Float @default(0)
+  completedAt DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  lessonId String
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([lessonId])
+  @@index([userId, isCompleted])
+}
+
+model Comment {
+  id      String @id @default(cuid())
+  content String
+
+  lessonId String
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  parentId String?
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentReplies")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lessonId])
+  @@index([userId])
+}
+
+model WalletTransaction {
+  id           String                @id @default(cuid())
+  type         WalletTransactionType
+  amount       Int
+  balanceAfter Int
+  note         String?
+  metadata     Json?
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  courseId String?
+  course   Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  purchaseId String? @unique
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  externalPaymentId String? @unique
+  externalPayment   ExternalPayment? @relation(fields: [externalPaymentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([courseId])
+  @@index([type, createdAt])
+}
+
+model Purchase {
+  id             String         @id @default(cuid())
+  originalAmount Int
+  discountAmount Int            @default(0)
+  finalAmount    Int
+  currency       String         @default("VND")
+  status         PurchaseStatus @default(COMPLETED)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  walletTransaction WalletTransaction?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, courseId])
+  @@index([courseId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model ExternalPayment {
+  id                      String                @id @default(cuid())
+  provider                PaymentProvider
+  status                  ExternalPaymentStatus @default(PENDING)
+  amount                  Int
+  currency                String                @default("VND")
+  note                    String?
+  providerSessionId       String                @unique
+  providerPaymentIntentId String?               @unique
+  completedAt             DateTime?
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  walletTransaction WalletTransaction?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model ProcessedWebhookEvent {
+  id              String          @id @default(cuid())
+  provider        PaymentProvider
+  providerEventId String          @unique
+  payload         Json?
+  processedAt     DateTime        @default(now())
+
+  @@index([provider, processedAt])
+}
+
+model Notification {
+  id       String           @id @default(cuid())
+  type     NotificationType
+  title    String
+  body     String
+  link     String?
+  isRead   Boolean          @default(false)
+  metadata Json?
+  readAt   DateTime?
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead, createdAt])
+}
+
+model Certificate {
+  id                 String   @id @default(cuid())
+  certificateNo      String   @unique
+  verifyCode         String   @unique
+  pdfUrl             String?
+  completionSnapshot Json?
+  issuedAt           DateTime @default(now())
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([courseId, issuedAt])
+  @@index([userId, issuedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorEmail String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
 }
