@@ -18,9 +18,30 @@ const app = express();
 
 app.use(helmet());
 
-const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174', process.env.FRONTEND_URL].filter(Boolean);
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  ...(process.env.FRONTEND_URLS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+  process.env.FRONTEND_URL,
+].filter(Boolean);
 
-app.use(cors({ origin: allowedOrigins }));
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`CORS blocked origin: ${origin}`));
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
